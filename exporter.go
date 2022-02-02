@@ -1,13 +1,13 @@
-
 package main
 
 import (
-	"github.com/hpcloud/tail"
+	// "github.com/hpcloud/tail"
 	"bytes"
 	"fmt"
 	"log"
 	"net/http"
 	"time"
+	"os/exec"
 )
 
 func main() {
@@ -18,28 +18,33 @@ func main() {
 }
 
 func call(urlPath, method string) error {
+
 	client := &http.Client{
 		Timeout: time.Second * 10,
 	}
-	t, err := tail.TailFile("/go/test", tail.Config{Follow: true})
+	// t, err := tail.TailFile("/go/test", tail.Config{Follow: true})
+	// if err != nil {
+	// 	fmt.Println("Looks like an error!")
+	// }
+	filename := "/go/test"
+	b, err := exec.Command("/bin/decgrep", "-f", "4", filename).Output()
 	if err != nil {
-		fmt.Println("Looks like an error!")
+		fmt.Println(err.Error())
 	}
-	for line := range t.Lines {
-		fmt.Println(line.Text)
-		b := []byte(line.Text)
 
-		req, err := http.NewRequest(method, urlPath, bytes.NewReader(b))
-		if err != nil {
-			fmt.Println("Error on post!")
-			return err
-		}
-		req.Header.Set("Content-Type", "application/octet-stream")
-		rsp, _ := client.Do(req)
-		if rsp.StatusCode != http.StatusOK {
-			log.Printf("Request failed with response code: %d", rsp.StatusCode)
-		}
-
+	// for line := range t.Lines {
+	// fmt.Println(string(b))
+	// b := []byte(line.Text)
+	req, err := http.NewRequest(method, urlPath, bytes.NewReader(b))
+	if err != nil {
+		fmt.Println("Error on post!")
+		return err
 	}
+	req.Header.Set("Content-Type", "application/octet-stream")
+	rsp, _ := client.Do(req)
+	if rsp.StatusCode != http.StatusOK {
+		log.Printf("Request failed with response code: %d", rsp.StatusCode)
+	}
+
 	return nil
 }
