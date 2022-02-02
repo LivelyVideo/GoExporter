@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	err := call("http://172.17.0.2:8080/", "POST")
+	err := call("http://172.17.0.2:8080/", "POST")  
 	if err != nil {
 		fmt.Printf("Error occurred. Err: %s", err.Error())
 	}
@@ -22,19 +22,13 @@ func call(urlPath, method string) error {
 	client := &http.Client{
 		Timeout: time.Second * 10,
 	}
-	// t, err := tail.TailFile("/go/test", tail.Config{Follow: true})
-	// if err != nil {
-	// 	fmt.Println("Looks like an error!")
-	// }
+
 	filename := "/go/test"
 	b, err := exec.Command("/bin/decgrep", "-f", "4", filename).Output()
 	if err != nil {
 		fmt.Println(err.Error())
 	}
 
-	// for line := range t.Lines {
-	// fmt.Println(string(b))
-	// b := []byte(line.Text)
 	req, err := http.NewRequest(method, urlPath, bytes.NewReader(b))
 	if err != nil {
 		fmt.Println("Error on post!")
