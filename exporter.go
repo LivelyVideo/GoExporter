@@ -1,30 +1,3 @@
-// package main
-
-// // import "github.com/ramilexe/binary-tail"
-// import ("github.com/hpcloud/tail"; "fmt"; "net/http"; "bytes"; "log")
-
-
-// func main(){
-// 	t, err := tail.TailFile("/go/test", tail.Config{Follow: true})
-// 	if err != nil {
-// 		fmt.Println("Looks like an error!")
-// 	}
-// 	for line := range t.Lines {
-// 		fmt.Println(line.Text)
-// 		// send line to http.Request 
-
-// 		responseBody := bytes.NewBuffer(postBody)
-// 		//Leverage Go's HTTP Post function to make request
-// 		resp, err := http.Post("http://172.17.0.2:8080", "application/octet-stream", responseBody)
-// 		//Handle Error
-// 		   if err != nil {
-// 			  log.Fatalf("An Error Occured %v", err)
-// 		   }
-// 		   defer resp.Body.Close()
-
-// 	}
-// }
-
 
 package main
 
