@@ -1,23 +1,27 @@
 package main
 
-import ("fmt";"net/http";"log";"io/ioutil";"os")
+import ("fmt";"net/http";"log";"io/ioutil";"os";"strings")
 
 func dataIn(w http.ResponseWriter, req *http.Request) {
 
+	justfile := strings.Join(req.Header["Filename"],"")
+	filename := "/new/" + justfile
+	fmt.Println(filename)
     buf, err := ioutil.ReadAll(req.Body)
 
     if err!=nil {
 		log.Fatal("request",err)
 	}
 
-    // fmt.Println(buf) // do whatever you want with the binary file buf
-	file, err := os.OpenFile("test.bin", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	fmt.Println(filename)
+	// Grab header data from request to create the right location and filename to append the incoming data.
+	file, err := os.OpenFile("/new/test.bin", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println(err)
 	}
 
 	_, err = file.Write(buf)
-	fmt.Println(string(buf))
+	// fmt.Println(string(buf))
 	if err != nil {
 		log.Fatal(err)
 	}
