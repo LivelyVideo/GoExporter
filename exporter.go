@@ -7,8 +7,8 @@ import (
 	"log"
 	"net/http"
 	"os/exec"
-	"time"
 	"strconv"
+	"time"
 )
 
 type payloadEntry struct {
@@ -30,11 +30,9 @@ func main() {
 	// fmt.Println("Reading payload:")
 	for _, entry := range payLoad {
 		call("http://172.17.0.3:8080/", "POST", entry)
-		fmt.Printf("%s:  - %s\n", entry.Filename,  strconv.Itoa(entry.Timestamp))
+		fmt.Printf("%s:  - %s\n", entry.Filename, strconv.Itoa(entry.Timestamp))
 	}
 }
-
-
 
 func generatePayload(directoryPath string, payload []payloadEntry) []payloadEntry {
 
