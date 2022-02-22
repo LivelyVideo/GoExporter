@@ -2,6 +2,11 @@
 
 ## For Stats Pipeline...exporter for binary logs. That http server is where the binary logs will be aggregated.  A basic binary log shipper (binary filebeat - )
 
+## Server
+The server is a basic http listener, which will accept a post with a filename and a timestamp header. The data payload is a byte array that contains the binary information from the exporter.  It will then copy the data from that post into a file named with the same name in the header, under a directory setup by the config.
+
+
+
 
 on the host,  agent should 
 - continuously make a call to a custom exe / script which then returns a chunk of binary data, a target filename & opaque string. 
@@ -12,3 +17,5 @@ on the host,  agent should
 
 
 - on the sever side the HTTP handler should append to the specified file the binary data
+
+
