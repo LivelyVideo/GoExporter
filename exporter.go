@@ -39,7 +39,7 @@ var fileList []payloadEntry
 //Initialization function - sets up the configuration fields
 func (c *config) init(args []string) error {
 	flags := flag.NewFlagSet(args[0], flag.ExitOnError)
-	flags.String(flag.DefaultConfigFlagname, "", "Path to config file")
+	flags.String(flag.DefaultConfigFlagname, "/conf/exporter.conf", "Path to config file")
 
 	var (
 		directory    = flags.String("logs_directory", "/binary-files", "Directory to read log files from")
