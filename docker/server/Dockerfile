@@ -1,0 +1,7 @@
+FROM golang:latest 
+WORKDIR /go/src
+COPY ../../server.go .
+RUN go env -w GO111MODULE=off
+RUN go build -o /bin/server   server.go
+ENTRYPOINT ["/bin/server"]
+
