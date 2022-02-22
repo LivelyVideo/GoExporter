@@ -3,14 +3,20 @@
 # Declare variables to be passed into your templates.
 
 replicaCount: 1
+exporter:
+  image:
+    repository: gcr.io/lively-video/goexporter-stats-exporter
+    pullPolicy: IfNotPresent
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: ""
+server:
+  image:
+    repository: gcr.io/lively-video/goexporter-stats-server
+    pullPolicy: IfNotPresent
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: ""
 
-image:
-  repository: nginx
-  pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: ""
-
-imagePullSecrets: []
+imagePullSecrets: lively-gcr-secret
 nameOverride: ""
 fullnameOverride: ""
 

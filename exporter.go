@@ -42,9 +42,9 @@ func (c *config) init(args []string) error {
 	flags.String(flag.DefaultConfigFlagname, "", "Path to config file")
 
 	var (
-		directory    = flags.String("logs_directory", "/go/src/files/", "Directory to read log files from")
+		directory    = flags.String("logs_directory", "/binary-files", "Directory to read log files from")
 		tick         = flags.Duration("tick", defaultTick, "Ticking interval")
-		statshosturl = flags.String("server_url", "http://172.17.0.3:8080/", "Url to use for posts to stats host")
+		statshosturl = flags.String("server_url", "http://stats-exporter-server:8080/", "Url to use for posts to stats host")
 		binarytocall = flags.String("binary", "/bin/decgrep", "Command to call to read binary log")
 	)
 
