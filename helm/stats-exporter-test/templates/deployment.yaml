@@ -31,11 +31,11 @@ spec:
         - name: {{ .Chart.Name }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: "{{ .Values.server.image.repository }}:{{ .Values.server.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.server.image.pullPolicy }}
           ports:
             - name: http
-              containerPort: 80
+              containerPort: {{ .Values.server.port }}
               protocol: TCP
           livenessProbe:
             httpGet:
@@ -45,12 +45,13 @@ spec:
             httpGet:
               path: /
               port: http
+          env: 
+            - name: SERVER_PORT
+              value: {{ .Values.server.port }}
+            - name: OUTPUT_DIRECTORY
+              value: "/received"
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-          volumeMounts:
-            {{- toYaml .Values.server.volumeMounts | default "" | nindent 12 }} 
-      volumes:
-        {{- toYaml .Values.server.volumes | default "" | nindent 8 }} 
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

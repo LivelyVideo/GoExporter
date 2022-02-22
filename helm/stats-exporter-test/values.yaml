@@ -9,21 +9,6 @@ exporter:
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
     tag: ""
-  volumes:
-  - name: source-files
-    hostPath:
-      path: /binary-files/
-  - name: exporter-conf
-    secret:
-      secretName: exporter-conf
-
-  volumeMounts:
-  - name: exporter-conf
-    mountPath: /conf
-  - name: docker2
-    mountPath: /usr/
-  - name: docker3
-    mountPath: /opt/
     
 server:
   image:
@@ -31,26 +16,8 @@ server:
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
     tag: ""
-  volumes:
-  - name: docker1
-    hostPath:
-      path: /var/
-  - name: docker2
-    hostPath:
-      path: /usr/
-  - name: docker3
-    hostPath:
-      path: /opt/
-      
-  volumeMounts:
-  - name: docker1
-    mountPath: /var/
-  - name: docker2
-    mountPath: /usr/
-  - name: docker3
-    mountPath: /opt/
 
-
+  port: 8080
 imagePullSecrets: lively-gcr-secret
 nameOverride: ""
 fullnameOverride: ""

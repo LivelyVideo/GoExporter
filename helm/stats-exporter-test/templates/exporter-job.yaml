@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ template "stats-exporter-test.fullname" . }}-exporter
+  labels:
+    app: {{ template "stats-exporter-test.name" . }}
+    chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  template:
+    metadata:
+      name: {{ template "stats-exporter-test.fullname" . }}-exporter
+      labels:
+        app: {{ template "stats-exporter-test.name" . }}
+        chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+        release: {{ .Release.Name }}
+        heritage: {{ .Release.Service }}
+    spec:
+      containers:
+      - name: exporter-test
+        image: {{ .Values.exporter.image }}
+        volumeMounts:
+          - name: {{ template "stats-exporter-test.fullname" . }}-exporter-conf
+            mountPath: /conf
+            subPath: exporter.conf
+          - name: {{ template "stats-exporter-test.fullname" . }}-exporter-source
+            mountPath: /binary-files
+      restartPolicy: Never
+      volumes:
+        - name: {{ template "stats-exporter-test.fullname" . }}-exporter-conf
+          configMap:
+            name: {{ template "stats-exporter-test.fullname" . }}-exporter-conf
+        - name: {{ template "stats-exporter-test.fullname" . }}-exporter-source
+          secret:
+            secretName: {{ template "stats-exporter-test.fullname" . }}-exporter-source
+
+
+  backoffLimit: 20
