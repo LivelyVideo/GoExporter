@@ -17,7 +17,7 @@ const file_mode = 0644
 func dataIn(w http.ResponseWriter, req *http.Request) {
 
 	// Grab header data from request to create the right location and filename to append the incoming data.
-
+        // TODO: handle missing fields, and check if the output directory exists
 	fmt.Printf("%s:  - %s\n", req.Header["Filename"], req.Header["Timestamp"])
 	justfile := strings.Join(req.Header["Filename"], "")
 	filename := os.Getenv("OUTPUT_DIRECTORY") + justfile

@@ -2,7 +2,7 @@ FROM golang:latest
 WORKDIR /go/src
 COPY server.go .
 RUN go env -w GO111MODULE=off
-RUN go build -o /bin/server   server.go
+RUN go build -o /bin/server  server.go
 RUN mkdir /received
 ENTRYPOINT ["/bin/server"]
 
