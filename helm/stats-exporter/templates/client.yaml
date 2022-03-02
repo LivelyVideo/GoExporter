@@ -1,0 +1,65 @@
+{{- if .Values.client.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ template "stats-exporter.fullname" . }}-client
+  labels:
+    app: {{ template "stats-exporter.name" . }}
+    chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ template "stats-exporter.name" . }}
+      chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+      release: {{ .Release.Name }}
+      heritage: {{ .Release.Service }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "stats-exporter.name" . }}
+        chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+        release: {{ .Release.Name }}
+        heritage: {{ .Release.Service }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: exporter-client
+        image: {{ .Values.client.image.repository }}
+        imagePullPolicy: {{ .Values.client.image.pullPolicy }}
+        {{- if .Values.client.sleep }}
+        command: ["sleep", "800"]
+        {{- end }}
+        resources:
+          {{- toYaml .Values.client.resources | nindent 12 }}
+        volumeMounts:
+          - name: {{ template "stats-exporter.fullname" . }}-conf
+            mountPath: /app/conf/exporter.conf
+            subPath: exporter.conf
+          - name: {{ template "stats-exporter.fullname" . }}-source
+            mountPath: {{ .Values.client.sourcedirectory }}
+      {{- range .Values.client.nodes }}
+      nodeSelector:
+        kubernetes.io/hostname: {{ . }}
+      {{- end }}
+      {{- with .Values.client.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.client.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: {{ template "stats-exporter.fullname" . }}-conf
+          configMap:
+            name: {{ template "stats-exporter.fullname" . }}-conf
+        - name: {{ template "stats-exporter.fullname" . }}-source
+          hostPath:
+            path: {{ .Values.client.sourcedirectory_node }}
+            type: DirectoryOrCreate        
+{{- end }}

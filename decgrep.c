@@ -30,6 +30,11 @@
 #define MAX_FILES       3
 #define MAX_TIME_ALIGN  10
 
+#define FORMAT_TABLE    1
+#define FORMAT_CSV      2
+#define FORMAT_PROTOBUF 3
+#define FORMAT_MSGPACK  4
+
 #define ALT_FILE_FORMAT_PROTOBUF 1
 #define ALT_FILE_FORMAT_MSGPACK  2
 
@@ -214,13 +219,11 @@ enc_protobuf_write_rec_to_file(
 
 
 // stores the label and the message encoded as msgpack byte stream
-// it is encoded as: <label, record length>, <record>
 static inline void
 enc_msgpack_write_rec_to_file(
         char *label, uint64_t label_len, xcode_dec_bin_log_record_t *rec, int fd)
 {
     uint8_t          *p;
-    uint32_t         size;
     int              rc;
     static uint8_t   buf[2 + MAX_LABEL_LEN + 2 + sizeof(xcode_dec_bin_log_record_t)];
 
@@ -529,7 +532,7 @@ format_1(int fd, int alt_file_fd, decgrep_conf_t *conf)
 }
 
 
-// csv
+// csv, protobuf, msgpack
 int
 format_2(int fd, int alt_file_fd, decgrep_conf_t *conf)
 {
@@ -624,19 +627,33 @@ format_2(int fd, int alt_file_fd, decgrep_conf_t *conf)
         			v_ingress_kbps = a_ingress_kbps = 0;
         		}
 
-        		printf("%s"
-        				"%"PRIu64",%d,%"PRIu32",%"PRIu32",%"PRIu32",%d,%d,%d"
-						",%d,%d,%d,%d,%d,%d,%d"
-						",%d,%d,%d,%d,%d,%d,%d,%d"
-						",%d,%d,%d\n",
-						label_buf,
-						rec[i].start_tm,
-						rec[i].epoch_len, rec[i].v_latest_pts, rec[i].v_last_dts, rec[i].a_last_dts,
-						v_ingress_kbps, a_ingress_kbps, rec[i].dec_sleep_tm,
-						rec[i].a_num_disc_millisec, rec[i].a_num_inject_millisec, rec[i].a_num_rd_calls, rec[i].a_num_rd, rec[i].a_num_wr,
-						rec[i].a_num_err, rec[i].v_min_pending, rec[i].v_max_pending, rec[i].v_num_disc_frame, rec[i].v_num_dup_frame,
-						rec[i].v_num_rd_calls, rec[i].v_num_rd, rec[i].v_num_wr, rec[i].v_num_err, rec[i].v_num_reinit_ctx,
-						rec[i].v_width, rec[i].v_height, rec[i].acc_param);
+                switch(conf->format){
+                case FORMAT_CSV:
+            		printf("%s"
+            				"%"PRIu64",%d,%"PRIu32",%"PRIu32",%"PRIu32",%d,%d,%d"
+    						",%d,%d,%d,%d,%d,%d,%d"
+    						",%d,%d,%d,%d,%d,%d,%d,%d"
+    						",%d,%d,%d\n",
+    						label_buf,
+    						rec[i].start_tm,
+    						rec[i].epoch_len, rec[i].v_latest_pts, rec[i].v_last_dts, rec[i].a_last_dts,
+    						v_ingress_kbps, a_ingress_kbps, rec[i].dec_sleep_tm,
+    						rec[i].a_num_disc_millisec, rec[i].a_num_inject_millisec, rec[i].a_num_rd_calls, rec[i].a_num_rd, rec[i].a_num_wr,
+    						rec[i].a_num_err, rec[i].v_min_pending, rec[i].v_max_pending, rec[i].v_num_disc_frame, rec[i].v_num_dup_frame,
+    						rec[i].v_num_rd_calls, rec[i].v_num_rd, rec[i].v_num_wr, rec[i].v_num_err, rec[i].v_num_reinit_ctx,
+    						rec[i].v_width, rec[i].v_height, rec[i].acc_param);
+
+            		break;
+                case FORMAT_PROTOBUF:
+                	enc_protobuf_write_rec_to_file(label_buf, label_len, &rec[i], fileno(stdout));
+                	break;
+                case FORMAT_MSGPACK:
+                	enc_msgpack_write_rec_to_file(label_buf, label_len, &rec[i], fileno(stdout));
+                    break;
+                default:
+                    fprintf(stderr, "unsupported format %d\n", conf->format);
+                    break;
+                }
 
         		if (alt_file_fd > 0) {
         			switch(conf->alt_file_format) {
@@ -648,7 +665,6 @@ format_2(int fd, int alt_file_fd, decgrep_conf_t *conf)
         				break;
         			}
         		}
-
         	}
         }
 
@@ -676,7 +692,7 @@ static void
 process_dirs(decgrep_conf_t *conf)
 {
     int                       fd, i, j, n;
-    int                       protobuf_fd;
+    int                       alt_file_fd;
     int                       rc;
     DIR                       *d;
     struct dirent             *dir;
@@ -690,7 +706,7 @@ process_dirs(decgrep_conf_t *conf)
     memset(files, 0, sizeof(files));
     memset(files_dir, 0, sizeof(files_dir));
     memset(files_mtime, 0, sizeof(files_mtime));
-    fd = protobuf_fd = 0;
+    fd = alt_file_fd = 0;
 
     // iterate over all the configured directories to scan
     for (i = 0; i < conf->num_dir; i++) {
@@ -763,8 +779,8 @@ process_dirs(decgrep_conf_t *conf)
 #endif
 
     if (conf->alt_file) {
-        protobuf_fd = open(conf->alt_file, O_WRONLY|O_CREAT|O_APPEND);
-        if (protobuf_fd < 0) {
+        alt_file_fd = open(conf->alt_file, O_WRONLY|O_CREAT|O_TRUNC, 0666);
+        if (alt_file_fd < 0) {
             fprintf(stderr, "failed to open %s. err=%s\n",
             		conf->alt_file, strerror(errno));
             exit(1);
@@ -795,11 +811,13 @@ process_dirs(decgrep_conf_t *conf)
         }
 
         switch(conf->format){
-        case 1:
-            format_1(fd, protobuf_fd, conf);
+        case FORMAT_TABLE:
+            format_1(fd, alt_file_fd, conf);
             break;
-        case 2:
-            format_2(fd, protobuf_fd, conf);
+        case FORMAT_CSV:
+        case FORMAT_PROTOBUF:
+        case FORMAT_MSGPACK:
+            format_2(fd, alt_file_fd, conf);
             break;
         default:
             fprintf(stderr, "unsupported format %d\n", conf->format);
@@ -813,8 +831,8 @@ process_dirs(decgrep_conf_t *conf)
     }
 
 
-    if (protobuf_fd > 0) {
-    	close(protobuf_fd);
+    if (alt_file_fd > 0) {
+    	close(alt_file_fd);
     }
 }
 
@@ -840,6 +858,8 @@ int main(int argc, char * const argv[])
             "-f <format>        - format:\n"
             "                     1 = Table with headers and date conversion (default)\n"
             "                     2 = CSV with no headers and no date conversion\n"
+            "                     3 = protobuf to stdout\n"
+            "                     4 = msgpack to stdout\n"
             "-s <timestamp>     - start timestamp\n"
             "-d <duration>      - duration in milliseconds (if only dur is specified it is taken from the start of the stream)\n"
             "-p <protobuf file> - optional file path into which the processed records will be stored as protobuf records\n"
@@ -923,7 +943,7 @@ int main(int argc, char * const argv[])
     }
 
     if (conf.alt_file) {
-        alt_file_fd = open(conf.alt_file, O_WRONLY|O_CREAT|O_APPEND, 0666);
+        alt_file_fd = open(conf.alt_file, O_WRONLY|O_CREAT|O_TRUNC, 0666);
         if (alt_file_fd < 0) {
             fprintf(stderr, "failed to open %s. err=%s\n", conf.alt_file, strerror(errno));
             exit(1);
@@ -931,10 +951,12 @@ int main(int argc, char * const argv[])
     }
 
     switch(conf.format){
-    case 1:
+    case FORMAT_TABLE:
         rc = format_1(fd, alt_file_fd, &conf);
         break;
-    case 2:
+    case FORMAT_CSV:
+    case FORMAT_PROTOBUF:
+    case FORMAT_MSGPACK:
         rc = format_2(fd, alt_file_fd, &conf);
         break;
     default:
@@ -950,3 +972,4 @@ int main(int argc, char * const argv[])
     }
     return rc;
 }
+

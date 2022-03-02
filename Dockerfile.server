@@ -4,5 +4,5 @@ COPY server.go .
 RUN go env -w GO111MODULE=off
 RUN go build -o /bin/server  server.go
 RUN mkdir /received
-ENTRYPOINT ["/bin/server"]
+CMD ["/bin/server","start"] 
 

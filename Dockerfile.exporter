@@ -1,10 +1,15 @@
 FROM golang:latest 
-COPY decgrep.c decoder_bin_log.h /
-RUN  gcc -o /bin/decgrep /decgrep.c -D_GNU_SOURCE  -lm
-WORKDIR /go/src
-COPY  exporter.go /go/src
+RUN mkdir /app
+WORKDIR /app
+COPY decgrep.c decoder_bin_log.h /app
+RUN  gcc -o /bin/decgrep decgrep.c -D_GNU_SOURCE  -lm
+COPY  exporter.go /app
 RUN go env -w GO111MODULE=off
 RUN go get github.com/namsral/flag
-RUN go build -o /bin/exporter   exporter.go
-ENTRYPOINT ["/bin/exporter"]
+RUN go build -o /app/exporter  exporter.go
+RUN mkdir conf
+RUN mkdir binlogs
+RUN mkdir files
+COPY files/* files/ 
+ENTRYPOINT ["/app/exporter"]
 

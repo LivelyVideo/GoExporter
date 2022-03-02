@@ -3,10 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
-	"errors"
+	// "errors"
+	"regexp"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"syscall"
 	"time"
+	"strings"
+	"path/filepath"
 
 	"github.com/namsral/flag"
 )
@@ -26,6 +28,10 @@ type config struct {
 	statshosturl string
 	binarytocall string
 	tick         time.Duration
+}
+type fileData struct {
+	fileInfo os.FileInfo
+	path string
 }
 
 type payloadEntry struct {
@@ -39,17 +45,18 @@ var fileList []payloadEntry
 //Initialization function - sets up the configuration fields
 func (c *config) init(args []string) error {
 	flags := flag.NewFlagSet(args[0], flag.ExitOnError)
-	flags.String(flag.DefaultConfigFlagname, "/conf/exporter.conf", "Path to config file")
+	confDir := getenv("CONF_DIR","conf/exporter.conf")
+	flags.String(flag.DefaultConfigFlagname, confDir, "Path to config file")
 
 	var (
-		directory    = flags.String("logs_directory", "/binary-files", "Directory to read log files from")
+		directory    = flags.String("dir", "binlogs", "Directory to read log files from")
 		tick         = flags.Duration("tick", defaultTick, "Ticking interval")
-		statshosturl = flags.String("server_url", "http://stats-exporter-server:8080/", "Url to use for posts to stats host")
-		binarytocall = flags.String("binary", "/bin/decgrep", "Command to call to read binary log")
+		statshosturl = flags.String("url", "http://stats-exporter-server.default/", "Url to use for posts to stats host")
+		binarytocall = flags.String("bin", "decgrep", "Command to call to read binary log")
 	)
 
 	if err := flags.Parse(args[1:]); err != nil {
-		fmt.Println("Error:")
+		fmt.Println("Error1:")
 		fmt.Println(err)
 		return err
 	}
@@ -111,7 +118,7 @@ func run(ctx context.Context, c *config, out io.Writer) error {
 		case <-time.Tick(c.tick):
 			err := generatePayload(c, fileList)
 			if err != nil {
-				fmt.Println("Error:")
+				fmt.Println("Error4:")
 				fmt.Println(err)
 				return err
 			}
@@ -131,31 +138,54 @@ func run(ctx context.Context, c *config, out io.Writer) error {
 	}
 }
 
+func createFileList (dir string) ([]fileData, error) {
+
+	var fileList []fileData
+	
+	libRegEx, e := regexp.Compile("^.*\\.bin\\.log$")
+	if e != nil {
+	    log.Fatal(e)
+		return nil,e
+	}
+
+	e = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+	    if err == nil && libRegEx.MatchString(info.Name()) {
+			foundFile := fileData{fileInfo: info, path: path}
+			fileList = append(fileList, foundFile)
+	    }
+	    return nil
+	})
+	if e != nil {
+	    log.Fatal(e)
+		return nil,e
+	}
+	return fileList, nil
+}
 // Cretes payloads for all files in a struct slice.
 func generatePayload(c *config, payload []payloadEntry) error {
-
 	var b []byte
 	var found bool
 
-	files, err := ioutil.ReadDir(c.directory)
+
+	files, err := createFileList(strings.Trim(c.directory, "\""))
 	if err != nil {
-		fmt.Println("Error:")
-		fmt.Println(err)
-		log.Fatal(err)
+    	fmt.Println(err)
+		fmt.Println("Error building filelist!")
 		return err
 	}
 
+	
+	fmt.Println("Checking files now: ")
 	for _, file := range files {
 		found = false
-		var filePath = c.directory + file.Name()
-
+		var filePath = file.path
+		fmt.Println("File path: " + filePath)
 		for i, _ := range fileList {
-			var filename = file.Name()
-			if fileList[i].Filename == filename {
+			if fileList[i].Filename == filePath {
 				found = true
-				fileList[i].Binarydata, err = exec.Command(c.binarytocall, "-f", "4", "-s", strconv.Itoa(fileList[i].Timestamp), filePath).Output() //adding timestamp to call, with flag -s
+				fileList[i].Binarydata, err = exec.Command(strings.Trim(c.binarytocall, "\""), "-f", "4", "-s", strconv.Itoa(fileList[i].Timestamp), filePath).Output() //adding timestamp to call, with flag -s
 				if err != nil {
-					fmt.Println("Error:")
+					fmt.Println("Error2:")
 					fmt.Println(err.Error())
 					return err
 				}
@@ -164,13 +194,14 @@ func generatePayload(c *config, payload []payloadEntry) error {
 		}
 
 		if !found {
-			b, err = exec.Command(c.binarytocall, "-f", "4", filePath).Output()
+			b, err = exec.Command(strings.Trim(c.binarytocall, "\""), "-f", "4", filePath).Output()
 			if err != nil {
-				fmt.Println("Error:")
+				fmt.Println("Error3:")
 				fmt.Println(err.Error())
 				return err
 			}
-			newEntry := payloadEntry{Filename: file.Name(), Timestamp: int(time.Now().UnixMilli()), Binarydata: b}
+
+			newEntry := payloadEntry{Filename: strings.TrimLeft(file.path,c.directory), Timestamp: int(time.Now().UnixMilli()), Binarydata: b}
 			fileList = append(fileList, newEntry)
 		}
 
@@ -181,22 +212,37 @@ func generatePayload(c *config, payload []payloadEntry) error {
 
 func call(urlPath, method string, payload payloadEntry) error {
 
-	client := &http.Client{
-		Timeout: time.Second * 10,
-	}
-	req, err := http.NewRequest(method, urlPath, bytes.NewReader(payload.Binarydata))
-	if err != nil {
-		fmt.Println("Error on generating request!")
-		return err
-	}
+    client := &http.Client{
+        Timeout: time.Second * 10,
+    }
+	url := strings.Trim(urlPath, "\"")
 
+    req, err := http.NewRequest(method, url,  bytes.NewReader(payload.Binarydata))
+
+	// req.Close = true
+    if err != nil {
+		fmt.Println("Error5")
+        return fmt.Errorf("Got error %s", err.Error())
+    }
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("filename", payload.Filename)
 	req.Header.Set("timestamp", strconv.Itoa(payload.Timestamp))
-	rsp, _ := client.Do(req)
-	if rsp.StatusCode != http.StatusOK {
-		log.Printf("Request failed with response code: %d", rsp.StatusCode)
-		return errors.New(string(rsp.StatusCode))
-	}
-	return nil
+    response, err := client.Do(req)
+    if err != nil {
+		fmt.Println("Error6")
+        return fmt.Errorf("Got error %s", err.Error())
+    }
+    defer response.Body.Close()
+	
+    return nil
+
+}
+
+
+func getenv(key, fallback string) string {
+    value := os.Getenv(key)
+    if len(value) == 0 {
+        return fallback
+    }
+    return value
 }
