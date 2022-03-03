@@ -53,9 +53,14 @@ spec:
               value: "/received"
           resources:
             {{- toYaml .Values.server.resources | nindent 12 }}
-      {{- with .Values.nodeSelector }}
+          {{- if .Values.server.testmount}}
+          volumeMounts:
+            - name: test-mount
+              mountPath: /mount
+          {{- end }}
+      {{- range .Values.server.nodes }}
       nodeSelector:
-        {{- toYaml . | nindent 8 }}
+        kubernetes.io/hostname: {{ . }}
       {{- end }}
       {{- with .Values.affinity }}
       affinity:
@@ -64,5 +69,12 @@ spec:
       {{- with .Values.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.server.testmount}}
+      volumes:
+        - name: test-mount
+          hostPath:
+            path: /var/log
+            type: DirectoryOrCreate 
       {{- end }}
 {{- end }}

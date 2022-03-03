@@ -32,8 +32,9 @@ server:
     pullPolicy: Always
     # Overrides the image tag whose default is the chart appVersion.
     tag: ""
-
+  nodes:
   port: 80 
+  testmount: false
 imagePullSecrets: 
 - name: lively-gcr-secret
 nameOverride: ""

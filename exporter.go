@@ -175,33 +175,43 @@ func generatePayload(c *config, payload []payloadEntry) error {
 	}
 
 	
-	fmt.Println("Checking files now: ")
 	for _, file := range files {
 		found = false
-		var filePath = file.path
+		var filePath = strings.TrimLeft(file.path,c.directory + "/")
+		//TrimLeft(s, cutset string) string
 		fmt.Println("File path: " + filePath)
 		for i, _ := range fileList {
+			fmt.Println("Filename: " + fileList[i].Filename )
 			if fileList[i].Filename == filePath {
 				found = true
-				fileList[i].Binarydata, err = exec.Command(strings.Trim(c.binarytocall, "\""), "-f", "4", "-s", strconv.Itoa(fileList[i].Timestamp), filePath).Output() //adding timestamp to call, with flag -s
+				fmt.Println("File found!")
+				now := int(time.Now().UnixMilli())
+				duration := now - fileList[i].Timestamp
+				fileList[i].Binarydata, err = exec.Command(strings.Trim(c.binarytocall, "\""), "-f", "4", "-s", strconv.Itoa(fileList[i].Timestamp),"-d",strconv.Itoa(duration), file.path).Output() //adding timestamp to call, with flag -s
 				if err != nil {
 					fmt.Println("Error2:")
 					fmt.Println(err.Error())
 					return err
 				}
-				fileList[i].Timestamp = int(time.Now().UnixMilli())
+				if fileList[i].Binarydata != nil {
+					fmt.Println("Duration: " + strconv.Itoa(duration))
+					fmt.Println("Timestamp: " + strconv.Itoa(fileList[i].Timestamp))
+				}else{
+					fmt.Println("File found and binarydata was nil")
+				}
+				fileList[i].Timestamp = now
 			}
 		}
 
 		if !found {
-			b, err = exec.Command(strings.Trim(c.binarytocall, "\""), "-f", "4", filePath).Output()
+			timestamp := int(time.Now().UnixMilli()) 
+			b, err = exec.Command(strings.Trim(c.binarytocall, "\""), "-f", "4", file.path).Output()
 			if err != nil {
 				fmt.Println("Error3:")
 				fmt.Println(err.Error())
 				return err
 			}
-
-			newEntry := payloadEntry{Filename: strings.TrimLeft(file.path,c.directory), Timestamp: int(time.Now().UnixMilli()), Binarydata: b}
+			newEntry := payloadEntry{Filename: strings.TrimLeft(file.path,c.directory), Timestamp: timestamp, Binarydata: b}
 			fileList = append(fileList, newEntry)
 		}
 
