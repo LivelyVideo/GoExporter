@@ -25,8 +25,10 @@ func dataIn(w http.ResponseWriter, req *http.Request) {
 		if !strings.HasSuffix(directory, "/") {
 			directory = directory + "/"
 		}
-		filename := directory + buildFileName(justfile)
+		filename := buildFileName(directory,justfile)
 		buf, err := ioutil.ReadAll(req.Body)
+
+
 
 		if err != nil {
 			log.Fatal("request", err)
@@ -51,11 +53,13 @@ func dataIn(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func buildFileName(filename string) string {
+func buildFileName(directory string, filename string) string {
 
 	stringArray := strings.Split(filename,"/")
 	lookPod := false
 	podName := ""
+
+	
 	for i, substring := range stringArray {
 		if lookPod {
 			podName = stringArray[i]
@@ -66,8 +70,17 @@ func buildFileName(filename string) string {
 		}
 	}
 
-	basefile := stringArray[len(stringArray)-1]
-	basefile = podName + "-" + basefile
+	path := directory + "/" + podName
+	fmt.Println("Directory to build:  " + path)
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		err := os.Mkdir(path, os.ModePerm)
+		if err != nil {
+			log.Println(err)
+		}
+	}
+
+	basefile := directory + "/" + podName + "/" + stringArray[len(stringArray)-1]
+	// basefile = podName + "-" + basefile
 
 	// TODO: pull pod name from filename and add to base file
 	

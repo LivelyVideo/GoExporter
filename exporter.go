@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	// "errors"
-	"regexp"
 	"fmt"
 	"io"
 	"log"
@@ -12,11 +11,12 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
+	"regexp"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
-	"strings"
-	"path/filepath"
 
 	"github.com/namsral/flag"
 )
@@ -24,14 +24,16 @@ import (
 const defaultTick = 10 * time.Second
 
 type config struct {
-	directory    string
-	statshosturl string
-	binarytocall string
-	tick         time.Duration
+	directory      string
+	statshosturl   string
+	binarytocall   string
+	includePattern string
+	exDirectories  string
+	tick           time.Duration
 }
 type fileData struct {
 	fileInfo os.FileInfo
-	path string
+	path     string
 }
 
 type payloadEntry struct {
@@ -45,14 +47,16 @@ var fileList []payloadEntry
 //Initialization function - sets up the configuration fields
 func (c *config) init(args []string) error {
 	flags := flag.NewFlagSet(args[0], flag.ExitOnError)
-	confDir := getenv("CONF_DIR","conf/exporter.conf")
+	confDir := getenv("CONF_DIR", "conf/exporter.conf")
 	flags.String(flag.DefaultConfigFlagname, confDir, "Path to config file")
 
 	var (
-		directory    = flags.String("dir", "binlogs", "Directory to read log files from")
-		tick         = flags.Duration("tick", defaultTick, "Ticking interval")
-		statshosturl = flags.String("url", "http://stats-exporter-server.default/", "Url to use for posts to stats host")
-		binarytocall = flags.String("bin", "decgrep", "Command to call to read binary log")
+		directory      = flags.String("dir", "binlogs", "Directory to read log files from")
+		tick           = flags.Duration("tick", defaultTick, "Ticking interval")
+		statshosturl   = flags.String("url", "http://stats-exporter-server.default/", "Url to use for posts to stats host")
+		binarytocall   = flags.String("bin", "decgrep -f 4", "Executable binary, and flags, to use to read log files")
+		includePattern = flags.String("incl", "^.*\\.bin\\.log$", "Search pattern for binary log files")
+		exDirectories  = flags.String("exds", "", "Slice of directories to exlude from log file search - comma delineated")
 	)
 
 	if err := flags.Parse(args[1:]); err != nil {
@@ -65,6 +69,8 @@ func (c *config) init(args []string) error {
 	c.directory = *directory
 	c.statshosturl = *statshosturl
 	c.binarytocall = *binarytocall
+	c.includePattern = *includePattern
+	c.exDirectories = *exDirectories
 
 	return nil
 }
@@ -105,6 +111,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		os.Exit(1)
 	}
+
 }
 
 func run(ctx context.Context, c *config, out io.Writer) error {
@@ -136,123 +143,161 @@ func run(ctx context.Context, c *config, out io.Writer) error {
 			}
 		}
 	}
+
 }
 
-func createFileList (dir string) ([]fileData, error) {
+func createFileList(c *config, dir string) ([]fileData, error) {
 
 	var fileList []fileData
-	
-	libRegEx, e := regexp.Compile("^.*\\.bin\\.log$")
+
+	libRegEx, e := regexp.Compile(c.includePattern)
 	if e != nil {
-	    log.Fatal(e)
-		return nil,e
+		log.Fatal(e)
+		return nil, e
 	}
 
+	exclusionDirectories := strings.Split(c.exDirectories, ",")
+	//Check if no exclusion directory case (1 item in a array of blank string), set to nil
+	if len(exclusionDirectories) == 1 && exclusionDirectories[0] == "" {
+		exclusionDirectories = nil
+	}
 	e = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-	    if err == nil && libRegEx.MatchString(info.Name()) {
+		if err == nil && libRegEx.MatchString(info.Name()) {
+			if len(exclusionDirectories) > 0 {
+				for _, exDirectory := range exclusionDirectories {
+					fmt.Println("Exclusion directory " + exDirectory)
+					if info.IsDir() && info.Name() == exDirectory {
+						fmt.Println("Skipping " + info.Name())
+						return filepath.SkipDir
+					}
+				}
+			}
 			foundFile := fileData{fileInfo: info, path: path}
+			fmt.Println("Found file " + info.Name())
 			fileList = append(fileList, foundFile)
-	    }
-	    return nil
+		}
+		return nil
 	})
 	if e != nil {
-	    log.Fatal(e)
-		return nil,e
+		log.Fatal(e)
+		return nil, e
 	}
 	return fileList, nil
 }
+
 // Cretes payloads for all files in a struct slice.
 func generatePayload(c *config, payload []payloadEntry) error {
 	var b []byte
 	var found bool
 
-
-	files, err := createFileList(strings.Trim(c.directory, "\""))
+	files, err := createFileList(c, strings.Trim(c.directory, "\""))
 	if err != nil {
-    	fmt.Println(err)
+		fmt.Println(err)
 		fmt.Println("Error building filelist!")
 		return err
 	}
 
-	
+	commandLine := strings.Fields(c.binarytocall)
+	// x, a = a[0], a[1:]
+	command, commandLine := commandLine[0], commandLine[1:]
+
+	command = strings.Trim(command, "\"")
+	var commandLineNew []string = nil
+
 	for _, file := range files {
 		found = false
-		var filePath = strings.TrimLeft(file.path,c.directory + "/")
+		var filePath = strings.TrimLeft(file.path, c.directory+"/")
 		//TrimLeft(s, cutset string) string
+
 		fmt.Println("File path: " + filePath)
 		for i, _ := range fileList {
-			fmt.Println("Filename: " + fileList[i].Filename )
+			fmt.Println("Filename: " + fileList[i].Filename)
 			if fileList[i].Filename == filePath {
 				found = true
 				fmt.Println("File found!")
 				now := int(time.Now().UnixMilli())
 				duration := now - fileList[i].Timestamp
-				fileList[i].Binarydata, err = exec.Command(strings.Trim(c.binarytocall, "\""), "-f", "4", "-s", strconv.Itoa(fileList[i].Timestamp),"-d",strconv.Itoa(duration), file.path).Output() //adding timestamp to call, with flag -s
+				// create command  with duration, using previous request timestamp
+
+				commandLineNew = append(commandLine, "-s")
+				commandLineNew = append(commandLineNew, strconv.Itoa(fileList[i].Timestamp))
+				commandLineNew = append(commandLineNew, "-d")
+				commandLineNew = append(commandLineNew, strconv.Itoa(duration))
+				commandLineNew = append(commandLineNew, file.path)
+
+				fileList[i].Binarydata, err = exec.Command(command, commandLineNew...).Output() //adding timestamp to call, with flag -s
 				if err != nil {
 					fmt.Println("Error2:")
 					fmt.Println(err.Error())
 					return err
 				}
 				if fileList[i].Binarydata != nil {
-					fmt.Println("Duration: " + strconv.Itoa(duration))
 					fmt.Println("Timestamp: " + strconv.Itoa(fileList[i].Timestamp))
-				}else{
+					fmt.Println("Duration: " + strconv.Itoa(duration))
+				} else {
 					fmt.Println("File found and binarydata was nil")
 				}
 				fileList[i].Timestamp = now
 			}
 		}
-
+		//c.binarytocall, "\""), "-f", "4",
 		if !found {
-			timestamp := int(time.Now().UnixMilli()) 
-			b, err = exec.Command(strings.Trim(c.binarytocall, "\""), "-f", "4", file.path).Output()
+			timestamp := int(time.Now().UnixMilli())
+
+			//Create command  without duration - initial call
+			commandLineNew = append(commandLine, "-s")
+			commandLineNew = append(commandLineNew, strconv.Itoa(timestamp))
+			commandLineNew = append(commandLineNew, file.path)
+		
+
+			b, err = exec.Command(command, commandLineNew...).Output()
 			if err != nil {
 				fmt.Println("Error3:")
 				fmt.Println(err.Error())
 				return err
 			}
-			newEntry := payloadEntry{Filename: strings.TrimLeft(file.path,c.directory), Timestamp: timestamp, Binarydata: b}
+			newEntry := payloadEntry{Filename: strings.TrimLeft(file.path, c.directory), Timestamp: timestamp, Binarydata: b}
 			fileList = append(fileList, newEntry)
 		}
 
 	}
+
 	return nil
 
 }
 
 func call(urlPath, method string, payload payloadEntry) error {
 
-    client := &http.Client{
-        Timeout: time.Second * 10,
-    }
+	client := &http.Client{
+		Timeout: time.Second * 10,
+	}
 	url := strings.Trim(urlPath, "\"")
 
-    req, err := http.NewRequest(method, url,  bytes.NewReader(payload.Binarydata))
+	req, err := http.NewRequest(method, url, bytes.NewReader(payload.Binarydata))
 
 	// req.Close = true
-    if err != nil {
+	if err != nil {
 		fmt.Println("Error5")
-        return fmt.Errorf("Got error %s", err.Error())
-    }
+		return fmt.Errorf("Got error %s", err.Error())
+	}
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("filename", payload.Filename)
 	req.Header.Set("timestamp", strconv.Itoa(payload.Timestamp))
-    response, err := client.Do(req)
-    if err != nil {
+	response, err := client.Do(req)
+	if err != nil {
 		fmt.Println("Error6")
-        return fmt.Errorf("Got error %s", err.Error())
-    }
-    defer response.Body.Close()
-	
-    return nil
+		return fmt.Errorf("Got error %s", err.Error())
+	}
+	defer response.Body.Close()
+
+	return nil
 
 }
 
-
 func getenv(key, fallback string) string {
-    value := os.Getenv(key)
-    if len(value) == 0 {
-        return fallback
-    }
-    return value
+	value := os.Getenv(key)
+	if len(value) == 0 {
+		return fallback
+	}
+	return value
 }
