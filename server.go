@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"errors"
 )
 
 const file_mode = 0644
@@ -25,35 +26,40 @@ func dataIn(w http.ResponseWriter, req *http.Request) {
 		if !strings.HasSuffix(directory, "/") {
 			directory = directory + "/"
 		}
-		filename := buildFileName(directory,justfile)
+
 		buf, err := ioutil.ReadAll(req.Body)
 
-
-
 		if err != nil {
-			log.Fatal("request", err)
+			log.Fatal("Req reading data: ", err)
 		}
 		// func Split(s, sep string) []string
 		
-
-		file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, file_mode)
-		if err != nil {
+		filename, err := buildFileName(directory,justfile)
+        if err != nil {
+			fmt.Println("Error with build name!")
 			fmt.Println(err)
+		}else{
+			fmt.Println("Open file: " + filename)
+			file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, file_mode)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			_, err = file.Write(buf)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if err := file.Close(); err != nil {
+				log.Fatal(err)
+			}
 		}
 
-		_, err = file.Write(buf)
-		if err != nil {
-			log.Fatal(err)
-		}
-		if err := file.Close(); err != nil {
-			log.Fatal(err)
-		}
 	} else {
 		fmt.Println("Not a POST!")
 	}
 }
 
-func buildFileName(directory string, filename string) string {
+func buildFileName(directory string, filename string) (string, error) {
 
 	stringArray := strings.Split(filename,"/")
 	lookPod := false
@@ -76,6 +82,7 @@ func buildFileName(directory string, filename string) string {
 		err := os.Mkdir(path, os.ModePerm)
 		if err != nil {
 			log.Println(err)
+			return path,err
 		}
 	}
 
@@ -91,7 +98,7 @@ func buildFileName(directory string, filename string) string {
 	// 	basefile = "green-" + basefile
 	// }
 
-	return basefile
+	return basefile,nil
 
 }
 func main() {

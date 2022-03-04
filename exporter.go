@@ -218,12 +218,14 @@ func generatePayload(c *config, payload []payloadEntry) error {
 				now := int(time.Now().UnixMilli())
 				duration := now - fileList[i].Timestamp
 				// create command  with duration, using previous request timestamp
-
-				commandLineNew = append(commandLine, "-s")
+				commandLineNew = append(commandLineNew, "-f")
+				commandLineNew = append(commandLineNew, "4")
+				commandLineNew = append(commandLineNew, "-s")
 				commandLineNew = append(commandLineNew, strconv.Itoa(fileList[i].Timestamp))
 				commandLineNew = append(commandLineNew, "-d")
 				commandLineNew = append(commandLineNew, strconv.Itoa(duration))
 				commandLineNew = append(commandLineNew, file.path)
+
 
 				fileList[i].Binarydata, err = exec.Command(command, commandLineNew...).Output() //adding timestamp to call, with flag -s
 				if err != nil {
@@ -245,10 +247,11 @@ func generatePayload(c *config, payload []payloadEntry) error {
 			timestamp := int(time.Now().UnixMilli())
 
 			//Create command  without duration - initial call
-			commandLineNew = append(commandLine, "-s")
+			commandLineNew = append(commandLineNew, "-f")
+			commandLineNew = append(commandLineNew, "4")
+			commandLineNew = append(commandLineNew, "-s")
 			commandLineNew = append(commandLineNew, strconv.Itoa(timestamp))
 			commandLineNew = append(commandLineNew, file.path)
-		
 
 			b, err = exec.Command(command, commandLineNew...).Output()
 			if err != nil {
