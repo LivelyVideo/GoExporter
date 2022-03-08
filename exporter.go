@@ -54,7 +54,7 @@ func (c *config) init(args []string) error {
 		directory      = flags.String("dir", "binlogs", "Directory to read log files from")
 		tick           = flags.Duration("tick", defaultTick, "Ticking interval")
 		statshosturl   = flags.String("url", "http://stats-exporter-server.default/", "Url to use for posts to stats host")
-		binarytocall   = flags.String("bin", "decgrep -f 4", "Executable binary, and flags, to use to read log files")
+		binarytocall   = flags.String("bin", "decgrep -f 5", "Executable binary, and flags, to use to read log files")
 		includePattern = flags.String("incl", "^.*\\.bin\\.log$", "Search pattern for binary log files")
 		exDirectories  = flags.String("exds", "", "Slice of directories to exlude from log file search - comma delineated")
 	)
@@ -218,8 +218,9 @@ func generatePayload(c *config, payload []payloadEntry) error {
 				now := int(time.Now().UnixMilli())
 				duration := now - fileList[i].Timestamp
 				// create command  with duration, using previous request timestamp
+				// Setup better way to create command - also must be configurable, change flags - etc.
 				commandLineNew = append(commandLineNew, "-f")
-				commandLineNew = append(commandLineNew, "4")
+				commandLineNew = append(commandLineNew, "5")
 				commandLineNew = append(commandLineNew, "-s")
 				commandLineNew = append(commandLineNew, strconv.Itoa(fileList[i].Timestamp))
 				commandLineNew = append(commandLineNew, "-d")
@@ -247,8 +248,9 @@ func generatePayload(c *config, payload []payloadEntry) error {
 			timestamp := int(time.Now().UnixMilli())
 
 			//Create command  without duration - initial call
+			// Setup better way to create command - also must be configurable, change flags - etc.
 			commandLineNew = append(commandLineNew, "-f")
-			commandLineNew = append(commandLineNew, "4")
+			commandLineNew = append(commandLineNew, "5")
 			commandLineNew = append(commandLineNew, "-s")
 			commandLineNew = append(commandLineNew, strconv.Itoa(timestamp))
 			commandLineNew = append(commandLineNew, file.path)
