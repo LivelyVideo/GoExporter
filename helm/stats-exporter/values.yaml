@@ -15,9 +15,10 @@ client:
     tag: ""
   statshosturl:  http://stats-exporter-server.default #"stats-exporter.default" #Default value is the kubernetes hostname for the server deployment 
   binarylogdir: "./binlogs"
-  binaryfile: decgrep
+  binaryfile: decgrep -f 4
   sourcedirectory: /app/binlogs
   sourcedirectory_node: /var/log
+  incl:
   sleep: true
   nodeSelector: {}
 

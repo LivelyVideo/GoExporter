@@ -14,4 +14,4 @@ data:
     dir="{{ .Values.client.binarylogdir }}"
     url="{{ .Values.client.statshosturl }}"
     bin="{{ .Values.client.binaryfile }}"
-
+    inc="{{ .Values.client.incl }}"
