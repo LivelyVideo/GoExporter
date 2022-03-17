@@ -56,7 +56,7 @@ func (c *config) init(args []string) error {
 	flags := flag.NewFlagSet(args[0], flag.ExitOnError)
 	confDir := getenv("CONF_DIR", "conf/exporter.conf")
 	flags.String(flag.DefaultConfigFlagname, confDir, "Path to config file")
-
+// Config file, flags to be used for the cli as well
 	var (
 		directory      	 = flags.String("dir", "binlogs", "Directory to read log files from")
 		tick           	 = flags.Duration("tick", defaultTick, "Ticking interval")
@@ -92,12 +92,12 @@ func main() {
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGHUP)
 
 	c := &config{}
+// In order to handle signals to stop, interrupt, etc.
 
 	defer func() {
 		signal.Stop(signalChan)
 		cancel()
 	}()
-
 	go func() {
 		for {
 			select {
@@ -123,6 +123,7 @@ func main() {
 
 }
 
+//  Main run function deals with the timing - in order to schedule how often logs are checked and then payloads sent
 func run(ctx context.Context, c *config, out io.Writer) error {
 	c.init(os.Args)
 	log.SetOutput(out)
@@ -138,6 +139,8 @@ func run(ctx context.Context, c *config, out io.Writer) error {
 				fmt.Println(err)
 				return err
 			}
+
+
 			for _, entry := range fileList {
 				if (entry.Binarydata != nil) &&  (entry.Sent == false) {
 					err = call(c.statshosturl, "POST", entry)
@@ -166,6 +169,7 @@ func run(ctx context.Context, c *config, out io.Writer) error {
 
 }
 
+// Function added to remove files from the source log file list.  
 func groomList(dir string, fileList []payloadEntry)([]payloadEntry, error){
 
 	var groomedList []payloadEntry
@@ -189,7 +193,10 @@ func groomList(dir string, fileList []payloadEntry)([]payloadEntry, error){
 	}
 	return groomedList,nil
 }
+// TODO - refactor create file list + generate payload.  In order to avoid grooming requirements, and if the payload has been sent or not if possible
 
+// Function that generates the filelist - this slice is used to keep track of the source logs(filename), their current []byte payloads, the timestamp for their last decgrep checks,
+//  As well as whether the current payload has been sent yet or not
 func createFileList(c *config, dir string) ([]fileData, error) {
 
 	var fileList []fileData
@@ -235,7 +242,7 @@ func createFileList(c *config, dir string) ([]fileData, error) {
 	return fileList, nil
 }
 
-// Cretes payloads for all files in a struct slice.
+// Grabs payloads for all files in the filelist struct slice, and adds a current payload and timestamp to it. Creates the command lne and flags for decgrep, then calls decgrep and uses the output for the payload
 func generatePayload(c *config) error {
 	var b []byte
 	var found bool
@@ -250,46 +257,34 @@ func generatePayload(c *config) error {
 	binary := strings.Trim(c.binarytocall,"\"")
 	commandLine := strings.Fields(binary)
 
-	// fmt.Println("test command here! ")
 
-	// for _,segment := range commandLine {
-	// 	fmt.Println(segment)
-	// }
 	command, commandLine := commandLine[0], commandLine[1:]
-	// fmt.Println("command here! ")
-	// for _,segment := range commandLine {
-	// 	fmt.Println(segment)
-	// }
+
 	command = strings.Trim(command, "\"")
 	var commandLineNew []string = nil
 
 	for _, file := range files {
 		found = false
 		var filePath = strings.TrimLeft(file.path, c.directory+"/")
-		//TrimLeft(s, cutset string) string
 
-		// fmt.Println("File path: " + filePath)
 		for i, _ := range fileList {
-			// fmt.Println("Filename: " + fileList[i].Filename)
 			if fileList[i].Filename == filePath {
 				found = true
-				// fmt.Println("File found!")
 				now := int(time.Now().UnixMilli())
-				// duration := now - fileList[i].Timestamp
-				// create command  with duration, using previous request timestamp
-				// Setup better way to create command - also must be configurable, change flags - etc.
-	
+				// Generating the command line for decgrep with timestamp (string slice) May need use of -d for duration?
 				commandLineNew = append(commandLine, "-s")
 				commandLineNew = append(commandLineNew, strconv.Itoa(fileList[i].Timestamp))
-				// commandLineNew = append(commandLineNew, "-d")
-				// commandLineNew = append(commandLineNew, strconv.Itoa(duration))
+
 				commandLineNew = append(commandLineNew, file.path)
 				
 				fmt.Println("File found in file list - printing command line....")
 				for _,segment := range commandLineNew {
 					fmt.Println(segment)
 				}
-
+				// Checking might need to avoid re-calling decgrep on file that hasn't had payload sent yet.  
+				if fileList[i].Sent {
+					fmt.Printf("Found file that is being used for decgrep and has a sent flag! %s  %s", fileList[i].Filename, strconv.Itoa(fileList[i].Timestamp))
+				}
 				b, err = exec.Command(command, commandLineNew...).Output() //adding timestamp to call, with flag -s
 				if err != nil {
 					fmt.Println("Error2:")
@@ -315,7 +310,7 @@ func generatePayload(c *config) error {
 				
 			}
 		}
-		//c.binarytocall, "\""), "-f", "4",
+		// File that 
 		if !found {
 			timestamp := int(time.Now().UnixMilli())
 
@@ -325,11 +320,9 @@ func generatePayload(c *config) error {
 			commandLineNew = append(commandLine, "-s")
 			commandLineNew = append(commandLineNew, strconv.Itoa(timestamp))
 			commandLineNew = append(commandLineNew, file.path)
-			// fmt.Println("Printing command line....")
-			// for _,segment := range commandLineNew {
-			// 	fmt.Println(segment)
-			// }
+
 			fmt.Println("File not found in file list, first decgrep - printing command line....")
+			fmt.Println(file.path)
 			for _,segment := range commandLineNew {
 				fmt.Println(segment)
 			}
@@ -351,6 +344,7 @@ func generatePayload(c *config) error {
 
 }
 
+//Does the http request, with the payload to post the data
 func call(urlPath, method string, payload payloadEntry) error {
 
 	client := &http.Client{
@@ -374,6 +368,7 @@ func call(urlPath, method string, payload payloadEntry) error {
 		}
 		defer response.Body.Close()
 	}else{
+		// Using a sent bool to tell if the payload was sent.  To avoid duplicates
 		fmt.Println("Payload already sent - " + payload.Filename)
 	}
 	return nil
@@ -388,7 +383,9 @@ func getenv(key, fallback string) string {
 	return value
 }
 
-
+// Generates the filename based on the directory used in the config
+// Pulls the podname in order to deal with multiple files with same name on single 
+// host. TODO: Might need more to hit log files that are NOT transcode and keep the pod names
 func buildFileName(directory string, filename string) (string, error) {
 
 	stringArray := strings.Split(filename,"/")
@@ -417,16 +414,6 @@ func buildFileName(directory string, filename string) (string, error) {
 	}
 
 	basefile := directory + "/" + podName + "/" + stringArray[len(stringArray)-1]
-	// basefile = podName + "-" + basefile
-
-	// TODO: pull pod name from filename and add to base file
-	
-	// if strings.Index(filename, "blue") > 0 {
-	// 	basefile = "blue-" + basefile 
-	// }
-	// if strings.Index(filename, "green") > 0 {
-	// 	basefile = "green-" + basefile
-	// }
 
 	return basefile,nil
 
