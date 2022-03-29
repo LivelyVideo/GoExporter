@@ -21,7 +21,9 @@ import (
 	"github.com/namsral/flag"
 )
 
-const defaultTick = 10 * time.Second
+const defaultTick = 2 * time.Second
+
+const startProbeDelay = 2 * time.Second
 
 const file_mode = 0644
 
@@ -129,6 +131,7 @@ func main() {
 
 }
 
+
 //  Main run function deals with the timing - in order to schedule how often logs are checked and then payloads sent
 func run(ctx context.Context, c *config, out io.Writer) error {
 
@@ -141,12 +144,19 @@ func run(ctx context.Context, c *config, out io.Writer) error {
 		case <-ctx.Done():
 			return nil
 		case <-time.Tick(c.tick):
-			fmt.Println("Time interval!")
 			err := createFileList(c, &logFiles)
 			if err != nil {
 				fmt.Println("Error4:")
 				fmt.Println(err)
 				return err
+			}
+
+			// Wait until server endpoint is available
+			for {
+				if waitUntilEndpoint(c){
+					break
+				}
+				time.Sleep(startProbeDelay)
 			}
 			// err = generatePayload(c,&logFiles)
 			// if err != nil {
@@ -185,11 +195,13 @@ func run(ctx context.Context, c *config, out io.Writer) error {
 
 }
 
+// Searches for log files based on exclusion directories, exclusion patterns and inclusion pattern.  It updates the struct array that is passed in by reference.
+// Only returns an error/or lack of one - but updates the file structs for the list of logfiles that will be used for other parts of the exporter.
 func createFileList(c *config, fileList *[]logFile) error {
 
 	// var fileList []logFile
 	var exists bool
-	fmt.Println("Creaing file list....")
+	fmt.Println("Creating file list....")
 	inclPattern := strings.Trim(c.includePattern, "\"")
 	libRegEx, e := regexp.Compile(inclPattern)
 	if e != nil {
@@ -227,7 +239,7 @@ func createFileList(c *config, fileList *[]logFile) error {
 				}
 			}
 			if !exists {
-				fmt.Printf("Adding %s to the list!", path)
+				fmt.Printf("Adding %s to the list\n", path)
 				foundFile := logFile{fileInfo: info, path: path, Timestamp: 0, Binarydata: nil}
 				// fmt.Println("Found file " + info.Name())
 				*fileList = append(*fileList, foundFile)
@@ -243,7 +255,8 @@ func createFileList(c *config, fileList *[]logFile) error {
 	return nil
 }
 
-// Grabs payloads for all files in the filelist struct slice, and adds a current payload and timestamp to it. Creates the command lne and flags for decgrep, then calls decgrep and uses the output for the payload
+// Grabs payloads for all files in the filelist struct slice, and adds a current payload and timestamp to it. Creates the command lne and flags for decgrep, 
+// then calls decgrep and uses the output for the payload
 func generatePayload(c *config, file logFile) ([]byte, int, error) {
 
 	fmt.Printf("Generate payload for %s\n", file.path)
@@ -257,7 +270,8 @@ func generatePayload(c *config, file logFile) ([]byte, int, error) {
 	// for _, file := range *fileList {
 
 	// var filePath = strings.TrimLeft(file.path, c.directory+"/")
-	if file.Timestamp != 0  {
+	// At least the second time the file is being read.  Previous timestamp is used to issue the command with -s 
+	if file.Timestamp != 0   {
 		// Generating the command line for decgrep with timestamp (string slice) May need use of -d for duration?
 		commandLineNew = append(commandLine, "-s")
 		commandLineNew = append(commandLineNew, strconv.Itoa(file.Timestamp))
@@ -271,7 +285,8 @@ func generatePayload(c *config, file logFile) ([]byte, int, error) {
 	}
 
 	var err error
-	b, err := exec.Command(command, commandLineNew...).Output() //adding timestamp to call, with flag -s
+	// Calls decgrep and receives the output as a []byte
+	b, err := exec.Command(command, commandLineNew...).Output() 
 	if err != nil {
 		fmt.Println("Error2:")
 		fmt.Println(err.Error())
@@ -287,10 +302,10 @@ func generatePayload(c *config, file logFile) ([]byte, int, error) {
 
 }
 
-//Does the http request, with the payload to post the data
+//Does the http request, with the payload to post the data. Sends filename and timestamp as headers
 func call(urlPath, method string, payload logFile, directory string) error {
 
-	fmt.Printf("Posting data from file %s", payload.path)
+	fmt.Printf("Posting data from file %s\n", payload.path)
 
 	client := &http.Client{
 		Timeout: time.Second * 10,
@@ -318,6 +333,7 @@ func call(urlPath, method string, payload logFile, directory string) error {
 
 }
 
+// Helper function to find the environment variable, or a default when it doesn't exist
 func getenv(key, fallback string) string {
 	value := os.Getenv(key)
 	if len(value) == 0 {
@@ -326,6 +342,7 @@ func getenv(key, fallback string) string {
 	return value
 }
 
+// Removes files that no longer exist from the filelist to avoid overly long files and duplications
 func removeFiles(c *config, fileList *[]logFile) error {
 
 	var newList []logFile
@@ -340,4 +357,29 @@ func removeFiles(c *config, fileList *[]logFile) error {
 	}
 	*fileList = newList
 	return nil
+}
+
+
+func waitUntilEndpoint(c *config) bool {
+
+	url := strings.Trim(c.statshosturl, "\"")
+
+	resp, err := http.Get(url)
+    if err != nil {
+        fmt.Println(err)
+		return false
+    }
+
+    // Print the HTTP Status Code and Status Name
+    fmt.Println("HTTP Response Status:", resp.StatusCode, http.StatusText(resp.StatusCode))
+
+    if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
+        fmt.Println("Endpoint up.")
+		return true
+    } else {
+        fmt.Println("Endpoint down.")
+		return false
+    }
+
+
 }

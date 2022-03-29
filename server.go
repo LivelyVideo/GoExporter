@@ -59,6 +59,7 @@ func dataIn(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+// Responsible for creating directories that are needed, and handles if there are filenames of the same name, but from different pods
 func buildFileName(directory string, filename string) (string, error) {
 
 	stringArray := strings.Split(filename,"/")
@@ -91,16 +92,12 @@ func buildFileName(directory string, filename string) (string, error) {
 
 	// TODO: pull pod name from filename and add to base file
 	
-	// if strings.Index(filename, "blue") > 0 {
-	// 	basefile = "blue-" + basefile 
-	// }
-	// if strings.Index(filename, "green") > 0 {
-	// 	basefile = "green-" + basefile
-	// }
 
 	return basefile,nil
 
 }
+
+
 func main() {
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)

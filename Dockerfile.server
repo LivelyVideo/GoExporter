@@ -1,6 +1,14 @@
+#ARG does work in copy --from=$ARG so we have to make this full multi build
+FROM  gcr.io/lively-video/sfu-ms3:6.4.1-mariat-dev  as sfu
 FROM golang:latest 
+
+COPY --from=sfu /usr/local/pvc/packages/node_modules/@livelyvideo/mediasoup/worker/out/Release/livelybingrep /bin/livelybingrep
+RUN apt update -y && apt install xxd -y
+
 WORKDIR /go/src
 COPY server.go .
+COPY decgrep.c decoder_bin_log.h .
+RUN  gcc -o /bin/decgrep decgrep.c -D_GNU_SOURCE  -lm
 RUN go env -w GO111MODULE=off
 RUN go build -o /bin/server  server.go
 RUN mkdir /received
