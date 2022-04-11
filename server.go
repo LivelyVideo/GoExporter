@@ -60,6 +60,7 @@ func dataIn(w http.ResponseWriter, req *http.Request) {
 }
 
 // Responsible for creating directories that are needed, and handles if there are filenames of the same name, but from different pods
+// A bit hacky - just grabs the directory under the 'pods' directory - and uses that to make the podname.  Since the directories under pods are the pod names
 func buildFileName(directory string, filename string) (string, error) {
 
 	stringArray := strings.Split(filename,"/")
