@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "stats-load-test.fullname" . }}-agent
+  labels:
+    app: {{ template "stats-load-test.name" . }}
+    chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+    statsloadtest: loadtest
+spec:
+  replicas: {{ .Values.agent.numberOfAgents }}
+  selector:
+    matchLabels:
+      app: {{ template "stats-load-test.name" . }}
+      chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+      release: {{ .Release.Name }}
+      heritage: {{ .Release.Service }}
+      statsloadtest: loadtest
+  template:
+    metadata:
+      labels:
+        app: {{ template "stats-load-test.name" . }}
+        chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+        release: {{ .Release.Name }}
+        heritage: {{ .Release.Service }}
+        statsloadtest: loadtest
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: exporter-agent
+        image: {{ .Values.agent.image.repository }}
+        imagePullPolicy: {{ .Values.agent.image.pullPolicy }}
+        {{- if .Values.agent.sleep }}
+        command: ["sleep", "800"]
+        {{- end }}
+        resources:
+          {{- toYaml .Values.agent.resources | nindent 12 }}
+        volumeMounts:
+          - name: {{ template "stats-load-test.fullname" . }}-conf
+            mountPath: /app/conf/exporter.conf
+            subPath: exporter.conf
+          - name: {{ template "stats-load-test.fullname" . }}-source
+            mountPath: {{ .Values.agent.sourcedirectory }}
+      - name: load-test
+        image: {{ .Values.loadAgent.image.repository }}
+        imagePullPolicy: {{ .Values.loadAgent.image.pullPolicy }}
+        {{- if .Values.loadAgent.sleep }}
+        command: ["sleep", "800"]
+        {{- end }}
+        resources:
+          {{- toYaml .Values.loadAgent.resources | nindent 12 }}
+        volumeMounts:
+          - name: {{ template "stats-load-test.fullname" . }}-conf
+            mountPath: /app/conf/exporter.conf
+            subPath: exporter.conf
+          - name: {{ template "stats-load-test.fullname" . }}-source
+            mountPath: {{ .Values.agent.sourcedirectory }}  
+        env:
+          - name: TYPE_OF_TEST
+            value:  {{ .Values.loadAgent.typeOfTest | quote }}
+          - name: NUMBER_OF_STREAMS
+            value: {{ .Values.loadAgent.numberOfStreams | quote }}  
+          - name: DIRECTORY
+            value: {{ .Values.agent.sourcedirectory | quote }}    
+          - name: FILENAME
+            value: {{ .Values.loadAgent.filename | quote }}                                
+      {{- with .Values.agent.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: stats-load-test
+                operator: In
+                values:
+                - load-test
+            topologyKey: topology.kubernetes.io/zone
+      volumes:
+        - name: {{ template "stats-load-test.fullname" . }}-conf
+          configMap:
+            name: {{ template "stats-load-test.fullname" . }}-conf
+        - name: {{ template "stats-load-test.fullname" . }}-source
+          hostPath:
+            path: {{ .Values.agent.sourcedirectory_node }}
+            type: DirectoryOrCreate 

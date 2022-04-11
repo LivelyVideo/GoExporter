@@ -1,0 +1,57 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: exporter-server-load-test
+  labels:
+spec:
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Allow
+  jobTemplate:
+    spec:
+      parallelism: {{ add1 .Values.server.numberOfAgents }}
+      template:
+        metadata:
+          name: exporter-server-load-test
+          labels:
+            chart: {{ $.Chart.Name }}-{{ $.Chart.Version | replace "+" "_" }}
+            release: {{ $.Release.Name }}
+            heritage: {{ $.Release.Service }}
+            statsloadtest: loadtest
+        spec:
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchExpressions:
+                  - key: statsloadserver
+                    operator: In
+                    values:
+                    - server
+                topologyKey: "kubernetes.io/hostname"
+          containers:
+          - name: stats-load-test-checker
+            image: {{ $.Values.checker.server.image.repository }}:{{ $.Values.checker.server.image.tag }}
+            volumeMounts:
+            - name: load-test-source
+              mountPath: {{ .Values.server.output_dir }}
+            env:
+            - name: DELETE_FLAG
+              value: {{ $.Values.checker.server.delete_flag | quote }}
+            - name: DIRECTORY
+              value: {{ .Values.server.output_dir | quote }}
+            - name: TYPE_OF_TEST
+              value:  {{ .Values.loadAgent.typeOfTest | quote }}
+          imagePullSecrets:
+          - name: lively-gcr-secret
+          {{- if $.Values.checker.server.tolerations }}
+          tolerations:
+{{ toYaml $.Values.checker.server.tolerations | indent 12 }}
+          {{- end }}
+          volumes:
+          - name: load-test-source
+            hostPath:
+              path: {{ .Values.server.output_dir_local }}
+              type: DirectoryOrCreate 
+          restartPolicy: OnFailure
+  schedule: {{ $.Values.checker.server.schedule  | quote }}
+  successfulJobsHistoryLimit: 1

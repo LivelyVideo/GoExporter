@@ -1,0 +1,57 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: exporter-agent-load-test
+  labels:
+spec:
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Allow
+  jobTemplate:
+    spec:
+      parallelism: {{ add1 .Values.agent.numberOfAgents }}
+      template:
+        metadata:
+          name: exporter-agent-load-test
+          labels:
+            chart: {{ $.Chart.Name }}-{{ $.Chart.Version | replace "+" "_" }}
+            release: {{ $.Release.Name }}
+            heritage: {{ $.Release.Service }}
+            statsloadtest: loadtest
+        spec:
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchExpressions:
+                  - key: statsloadtest
+                    operator: In
+                    values:
+                    - loadtest
+                topologyKey: "kubernetes.io/hostname"
+          containers:
+          - name: stats-load-test-checker
+            image: {{ $.Values.checker.agent.image.repository }}:{{ $.Values.checker.agent.image.tag }}
+            volumeMounts:
+            - name: load-test-source
+              mountPath: {{ .Values.agent.sourcedirectory }}
+            env:
+            - name: DELETE_FLAG
+              value: {{ $.Values.checker.agent.delete_flag | quote }}
+            - name: DIRECTORY
+              value: {{ .Values.agent.sourcedirectory | quote }}
+            - name: TYPE_OF_TEST
+              value:  {{ .Values.loadAgent.typeOfTest | quote }}
+          imagePullSecrets:
+          - name: lively-gcr-secret
+          {{- if $.Values.checker.agent.tolerations }}
+          tolerations:
+{{ toYaml $.Values.checker.agent.tolerations | indent 12 }}
+          {{- end }}
+          volumes:
+          - name: load-test-source
+            hostPath:
+              path: {{ .Values.agent.sourcedirectory_node }}
+              type: DirectoryOrCreate 
+          restartPolicy: OnFailure
+  schedule: {{ $.Values.checker.agent.schedule  | quote }}
+  successfulJobsHistoryLimit: 1

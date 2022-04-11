@@ -1,0 +1,10 @@
+# ARG XCODE_TAG=master
+# FROM gcr.io/lively-video/transcode.webservice.xcode4:$XCODE_TAG as xcode
+FROM gcr.io/lively-video/goexporter-stats-exporter:latest as exporter
+FROM debian:latest
+
+COPY --from=exporter /bin/livelybingrep /bin/livelybingrep
+COPY --from=exporter /bin/decgrep /bin/decgrep
+COPY load_test.sh /app/load_test.sh
+WORKDIR /app/binlogs
+ENTRYPOINT ["/app/load_test.sh"]

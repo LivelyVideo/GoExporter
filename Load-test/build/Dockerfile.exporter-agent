@@ -1,0 +1,20 @@
+# ARG XCODE_TAG=master
+# FROM gcr.io/lively-video/transcode.webservice.xcode4:$XCODE_TAG as xcode
+FROM gcr.io/lively-video/goexporter-stats-exporter:latest as exporter
+FROM golang:latest 
+
+COPY --from=exporter /bin/livelybingrep /bin/livelybingrep
+COPY --from=exporter /bin/decgrep /bin/decgrep
+RUN apt update -y && apt install xxd -y
+RUN mkdir /app
+WORKDIR /app
+COPY  exporter.go /app
+RUN go env -w GO111MODULE=off
+RUN go get github.com/namsral/flag
+RUN go build -o /app/exporter  exporter.go
+RUN mkdir conf
+RUN mkdir binlogs
+RUN mkdir files
+COPY files/* files/ 
+ENTRYPOINT ["/app/exporter"]
+

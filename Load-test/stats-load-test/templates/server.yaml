@@ -1,0 +1,99 @@
+{{- if .Values.server.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "stats-load-test.fullname" . }}-server
+  labels:
+    app: {{ template "stats-load-test.name" . }}
+    chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+    statsloadtest: loadtest
+    statsloadserver: server
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: {{ template "stats-load-test.name" . }}
+      chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+      release: {{ .Release.Name }}
+      heritage: {{ .Release.Service }}
+      statsloadtest: loadtest
+      statsloadserver: server
+  template:
+    metadata:
+      labels:
+        app: {{ template "stats-load-test.name" . }}
+        chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+        release: {{ .Release.Name }}
+        heritage: {{ .Release.Service }}
+        statsloadtest: loadtest
+        statsloadserver: server
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "stats-load-test.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.server.image.repository }}"
+          imagePullPolicy: {{ .Values.server.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.server.port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          env: 
+            - name: SERVER_PORT
+              value: {{ .Values.server.port | quote }}
+            - name: OUTPUT_DIRECTORY
+              value: {{ .Values.server.output_dir | quote }}
+          resources:
+            {{- toYaml .Values.server.resources | nindent 12 }}
+          {{- if .Values.server.testmount}}
+          volumeMounts:
+            - name: test-mount
+              mountPath: /mount
+            - name: received
+              mountPath: {{ .Values.server.output_dir }}
+          {{- end }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: stats-load-test
+                operator: In
+                values:
+                - load-test
+            topologyKey: topology.kubernetes.io/zone
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.server.testmount}}
+      volumes:
+        - name: test-mount
+          hostPath:
+            path: /var/log
+            type: DirectoryOrCreate 
+        - name: received
+          hostPath:
+            path: {{ .Values.server.output_dir_local }}
+            type: DirectoryOrCreate
+      {{- end }}
+{{- end }}

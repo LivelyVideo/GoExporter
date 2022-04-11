@@ -1,0 +1,135 @@
+# Default values for stats-load-test.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+apiVersion: apps/v1
+selectorLabels:
+  statsloadtest: loadtest
+podAnnotations:
+  statsloadtest: loadtest
+checker:
+  agent:
+    image:
+      repository: gcr.io/lively-video/goexporter-load-checker
+      tag: latest
+      pullPolicy: Always
+    schedule: 1 * * * *
+  server:
+    image:
+      repository: gcr.io/lively-video/goexporter-load-checker
+      tag: latest
+      pullPolicy: Always
+    schedule: 1 * * * *
+agent:
+  enabled: true
+  nodes: 
+    # - gke-lively-dev-usc1a-border-transcode-0cdf09df-jss3
+    # - gke-lively-dev-usc1a-default-pool-3236a61e-9ddi
+  image:
+    repository: gcr.io/lively-video/goexporter-stats-exporter
+    pullPolicy: Always
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: ""
+  statshosturl:  http://stats-load-test-server.default #"stats-load-test.default" #Default value is the kubernetes hostname for the server deployment 
+  binarylogdir: "./binlogs"
+  binaryfile: decgrep -f 4
+  sourcedirectory: /app/binlogs
+  sourcedirectory_node: /var/log
+  numberOfAgents: 1
+  incl: "^.*load-test.*\\.bin\\.log$"   #.bin.log is the default extension from the livelybingrep test.  The decgrep extension must be set explicitly
+  sleep: false
+  nodeSelector: {}
+
+  tolerations: []
+
+  affinity: {}
+  resources: {}
+loadAgent:
+  image:
+    repository: gcr.io/lively-video/goexporter-load-tester
+    pullPolicy: Always
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: "latest"
+  numberOfStreams: 200
+  typeOfTest: "SFU"
+  filename: load-test
+server:
+  enabled: true
+  image:
+    repository: gcr.io/lively-video/goexporter-stats-server
+    pullPolicy: Always
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: ""
+  nodes:
+  port: 80 
+  testmount: false
+  output_dir: "/received"
+  output_dir_local: "/tmp/received"
+imagePullSecrets: 
+- name: lively-gcr-secret
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: chart-example.local
+      paths: []
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

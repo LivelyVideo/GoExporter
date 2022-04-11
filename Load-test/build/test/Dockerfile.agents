@@ -1,0 +1,3 @@
+FROM gcr.io/lively-video/goexporter-load-tester:latest
+COPY check_test_agent.sh
+ENTRYPOINT ["/app/check_test_agent.sh"]

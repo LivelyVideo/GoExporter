@@ -1,0 +1,20 @@
+
+   
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "stats-load-test.fullname" . }}-conf
+  labels:
+    app: {{ template "stats-load-test.fullname" . }}
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    release: "{{ .Release.Name }}"
+    heritage: "{{ .Release.Service }}"
+data:
+  exporter.conf: |-
+    dir="{{ .Values.agent.binarylogdir }}"
+    url="{{ .Values.agent.statshosturl }}"
+    bin="{{ .Values.agent.binaryfile }}"
+    incl="^.*{{ .Values.loadAgent.filename }}.*\.bin\.log"
+
+
+
