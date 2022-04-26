@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -10,7 +11,6 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
-	"errors"
 )
 
 const file_mode = 0644
@@ -18,10 +18,17 @@ const file_mode = 0644
 func dataIn(w http.ResponseWriter, req *http.Request) {
 	if req.Method == "POST" {
 		// Grab header data from request to create the right location and filename to append the incoming data.
-    	    // TODO: handle missing fields, and check if the output directory exists
+		// TODO: handle missing fields, and check if the output directory exists
+		if len(req.Header["Filename"]) == 0 || len(req.Header["Timestamp"]) == 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Println("Missing header!")
+			fmt.Println("Filename: ", req.Header["Filename"])
+			fmt.Println("Timestamp: ", req.Header["Timestamp"])
+			return
+		}
 		fmt.Printf("%s:  - %s\n", req.Header["Filename"], req.Header["Timestamp"])
 		justfile := strings.Join(req.Header["Filename"], "")
-		directory := getenv("OUTPUT_DIRECTORY","/received") 
+		directory := getenv("OUTPUT_DIRECTORY", "/received")
 
 		if !strings.HasSuffix(directory, "/") {
 			directory = directory + "/"
@@ -30,32 +37,39 @@ func dataIn(w http.ResponseWriter, req *http.Request) {
 		buf, err := ioutil.ReadAll(req.Body)
 
 		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
 			log.Fatal("Req reading data: ", err)
 		}
 		// func Split(s, sep string) []string
-		
-		filename, err := buildFileName(directory,justfile)
-        if err != nil {
+
+		filename, err := buildFileName(directory, justfile)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Println("Error with build name!")
 			fmt.Println(err)
-		}else{
+		} else {
 			fmt.Println("Open file: " + filename)
 			file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, file_mode)
 			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
 				fmt.Println(err)
 			}
 
 			_, err = file.Write(buf)
 			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
 				log.Fatal(err)
 			}
 			if err := file.Close(); err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
 				log.Fatal(err)
 			}
 		}
 
 	} else {
-		fmt.Println("Not a POST!")
+		w.WriteHeader(http.StatusOK)
+
+		fmt.Println("Get request from: ", req.RemoteAddr)
 	}
 }
 
@@ -63,11 +77,10 @@ func dataIn(w http.ResponseWriter, req *http.Request) {
 // A bit hacky - just grabs the directory under the 'pods' directory - and uses that to make the podname.  Since the directories under pods are the pod names
 func buildFileName(directory string, filename string) (string, error) {
 
-	stringArray := strings.Split(filename,"/")
+	stringArray := strings.Split(filename, "/")
 	lookPod := false
 	podName := ""
 
-	
 	for i, substring := range stringArray {
 		if lookPod {
 			podName = stringArray[i]
@@ -84,7 +97,7 @@ func buildFileName(directory string, filename string) (string, error) {
 		err := os.Mkdir(path, os.ModePerm)
 		if err != nil {
 			log.Println(err)
-			return path,err
+			return path, err
 		}
 	}
 
@@ -92,12 +105,10 @@ func buildFileName(directory string, filename string) (string, error) {
 	// basefile = podName + "-" + basefile
 
 	// TODO: pull pod name from filename and add to base file
-	
 
-	return basefile,nil
+	return basefile, nil
 
 }
-
 
 func main() {
 	ctx := context.Background()
@@ -129,16 +140,14 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", dataIn)
-	log.Fatalln(http.ListenAndServe(":"+getenv("SERVER_PORT","80"), mux))
+	log.Fatalln(http.ListenAndServe(":"+getenv("SERVER_PORT", "80"), mux))
 
 }
 
-
-
 func getenv(key, fallback string) string {
-    value := os.Getenv(key)
-    if len(value) == 0 {
-        return fallback
-    }
-    return value
+	value := os.Getenv(key)
+	if len(value) == 0 {
+		return fallback
+	}
+	return value
 }

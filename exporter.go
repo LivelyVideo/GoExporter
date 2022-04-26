@@ -131,7 +131,6 @@ func main() {
 
 }
 
-
 //  Main run function deals with the timing - in order to schedule how often logs are checked and then payloads sent
 func run(ctx context.Context, c *config, out io.Writer) error {
 
@@ -153,7 +152,7 @@ func run(ctx context.Context, c *config, out io.Writer) error {
 
 			// Wait until server endpoint is available
 			for {
-				if waitUntilEndpoint(c){
+				if waitUntilEndpoint(c) {
 					break
 				}
 				time.Sleep(startProbeDelay)
@@ -168,10 +167,10 @@ func run(ctx context.Context, c *config, out io.Writer) error {
 			for i, _ := range logFiles {
 				fmt.Printf("Payload and post for %s\n", logFiles[i].path)
 				logFiles[i].Binarydata, logFiles[i].Timestamp, err = generatePayload(c, logFiles[i])
-				fmt.Printf("After generate - Timestamp for %s : %s\n",logFiles[i].path,strconv.Itoa(logFiles[i].Timestamp))
+				fmt.Printf("After generate - Timestamp for %s : %s\n", logFiles[i].path, strconv.Itoa(logFiles[i].Timestamp))
 				binaryOutput := base64.StdEncoding.EncodeToString(logFiles[i].Binarydata)
-				fmt.Printf("After generate - Bdata for %s: %s\n",logFiles[i].path,binaryOutput)
-				if (logFiles[i].Binarydata != nil)  {
+				fmt.Printf("After generate - Bdata for %s: %s\n", logFiles[i].path, binaryOutput)
+				if logFiles[i].Binarydata != nil {
 					fmt.Println("Calling....")
 					err = call(c.statshosturl, "POST", logFiles[i], c.directory)
 					if err != nil {
@@ -234,7 +233,7 @@ func createFileList(c *config, fileList *[]logFile) error {
 			fmt.Println(path)
 			for _, currentFile := range *fileList {
 				if currentFile.path == path {
-					fmt.Printf("%s already exists in the list!\n",path)
+					fmt.Printf("%s already exists in the list!\n", path)
 					exists = true
 				}
 			}
@@ -255,7 +254,7 @@ func createFileList(c *config, fileList *[]logFile) error {
 	return nil
 }
 
-// Grabs payloads for all files in the filelist struct slice, and adds a current payload and timestamp to it. Creates the command lne and flags for decgrep, 
+// Grabs payloads for all files in the filelist struct slice, and adds a current payload and timestamp to it. Creates the command lne and flags for decgrep,
 // then calls decgrep and uses the output for the payload
 func generatePayload(c *config, file logFile) ([]byte, int, error) {
 
@@ -270,8 +269,8 @@ func generatePayload(c *config, file logFile) ([]byte, int, error) {
 	// for _, file := range *fileList {
 
 	// var filePath = strings.TrimLeft(file.path, c.directory+"/")
-	// At least the second time the file is being read.  Previous timestamp is used to issue the command with -s 
-	if file.Timestamp != 0   {
+	// At least the second time the file is being read.  Previous timestamp is used to issue the command with -s
+	if file.Timestamp != 0 {
 		// Generating the command line for decgrep with timestamp (string slice) May need use of -d for duration?
 		commandLineNew = append(commandLine, "-s")
 		commandLineNew = append(commandLineNew, strconv.Itoa(file.Timestamp))
@@ -280,13 +279,13 @@ func generatePayload(c *config, file logFile) ([]byte, int, error) {
 		// Checking might need to avoid re-calling decgrep on file that hasn't had payload sent yet.
 	} else {
 		commandLineNew = append(commandLine, file.path)
-		fmt.Printf("File %s has no previous timestamp - %s\n", file.path,strconv.Itoa(file.Timestamp))
+		fmt.Printf("File %s has no previous timestamp - %s\n", file.path, strconv.Itoa(file.Timestamp))
 
 	}
 
 	var err error
 	// Calls decgrep and receives the output as a []byte
-	b, err := exec.Command(command, commandLineNew...).Output() 
+	b, err := exec.Command(command, commandLineNew...).Output()
 	if err != nil {
 		fmt.Println("Error2:")
 		fmt.Println(err.Error())
@@ -294,10 +293,10 @@ func generatePayload(c *config, file logFile) ([]byte, int, error) {
 	}
 	file.Timestamp = int(time.Now().UnixMilli())
 
-	if bytes.Compare(file.Binarydata , b) == 0 {
+	if bytes.Compare(file.Binarydata, b) == 0 {
 		fmt.Printf("%s providing duplicate binarydata from last timestamp!\n", file.path)
-	} 
-	fmt.Printf("Returning %s timestamp for %s\n",strconv.Itoa(file.Timestamp), file.path)
+	}
+	fmt.Printf("Returning %s timestamp for %s\n", strconv.Itoa(file.Timestamp), file.path)
 	return b, file.Timestamp, nil
 
 }
@@ -312,7 +311,7 @@ func call(urlPath, method string, payload logFile, directory string) error {
 	}
 	url := strings.Trim(urlPath, "\"")
 	filepath := strings.TrimLeft(payload.path, directory+"/")
-	
+
 	req, err := http.NewRequest(method, url, bytes.NewReader(payload.Binarydata))
 	// req.Close = true
 	if err != nil {
@@ -359,27 +358,25 @@ func removeFiles(c *config, fileList *[]logFile) error {
 	return nil
 }
 
-
 func waitUntilEndpoint(c *config) bool {
 
 	url := strings.Trim(c.statshosturl, "\"")
 
 	resp, err := http.Get(url)
-    if err != nil {
-        fmt.Println(err)
+	if err != nil {
+		fmt.Println(err)
 		return false
-    }
+	}
 
-    // Print the HTTP Status Code and Status Name
-    fmt.Println("HTTP Response Status:", resp.StatusCode, http.StatusText(resp.StatusCode))
+	// Print the HTTP Status Code and Status Name
+	fmt.Println("HTTP Response Status:", resp.StatusCode, http.StatusText(resp.StatusCode))
 
-    if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
-        fmt.Println("Endpoint up.")
+	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
+		fmt.Println("Endpoint up.")
 		return true
-    } else {
-        fmt.Println("Endpoint down.")
+	} else {
+		fmt.Println("Endpoint down.")
 		return false
-    }
-
+	}
 
 }
